@@ -79,11 +79,17 @@ def main(_):
 				total_word = []
 				total_pos1 = []
 				total_pos2 = []
+				total_r = []
 				for i in range(len(word_batch)):
 					total_shape.append(total_num)
 					total_num += len(word_batch[i])
+					for j in range(len(y_batch[i])):
+						if y_batch[i][j] == 1:
+							rel = j
+							break
 					for word in word_batch[i]:
 						total_word.append(word)
+						total_r.append(rel)
 					for pos1 in pos1_batch[i]:
 						total_pos1.append(pos1)
 					for pos2 in pos2_batch[i]:
@@ -93,13 +99,14 @@ def main(_):
 				total_word = np.array(total_word)
 				total_pos1 = np.array(total_pos1)
 				total_pos2 = np.array(total_pos2)
-
+				total_r = np.array(total_r)
 				feed_dict[m.total_shape] = total_shape
 				feed_dict[m.input_word] = total_word
 				feed_dict[m.input_pos1] = total_pos1
 				feed_dict[m.input_pos2] = total_pos2
 				feed_dict[m.input_y] = y_batch
-
+				feed_dict[m.input_r] = total_r
+				feed_dict[m.keep_prob] = 0.5
 				temp, step, loss, accuracy,summary,l2_loss,final_loss= sess.run([train_op, global_step, m.total_loss, m.accuracy,merged_summary,m.l2_loss,m.final_loss], feed_dict)
 				time_str = datetime.datetime.now().isoformat()
 				accuracy = np.reshape(np.array(accuracy),(big_num))

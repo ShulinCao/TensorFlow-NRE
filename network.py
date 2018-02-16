@@ -30,17 +30,21 @@ class GRU:
 		self.input_pos1 = tf.placeholder(dtype=tf.int32,shape=[None,num_steps],name='input_pos1')
 		self.input_pos2 = tf.placeholder(dtype=tf.int32,shape=[None,num_steps],name='input_pos2')
 		self.input_y = tf.placeholder(dtype=tf.float32,shape=[None,num_classes],name='input_y')
+		self.input_r = tf.placeholder(dtype=tf.int32, shape=[None,1],name='input_r')
+		self.keep_prob = tf.placeholder(dtype=tf.float32,name='keep_prob')
 		self.total_shape = tf.placeholder(dtype=tf.int32,shape=[big_num+1],name='total_shape')
 		total_num = self.total_shape[-1]
-
+		self.input_r = tf.reshape(self.input_r, [-1])
 		word_embedding = tf.get_variable(initializer=word_embeddings,name = 'word_embedding')
 		pos1_embedding = tf.get_variable('pos1_embedding',[settings.pos_num,settings.pos_size])
 		pos2_embedding = tf.get_variable('pos2_embedding',[settings.pos_num,settings.pos_size])
-
+		# omega for word attention
 		attention_w = tf.get_variable('attention_omega',[gru_size,1])
-		sen_a = tf.get_variable('attention_A',[gru_size])
-		sen_r = tf.get_variable('query_r',[gru_size,1])		
+		# A for sentence-level attention, which is a diagonal matrix for each relation
+		sen_a = tf.get_variable('attention_A',[self.num_classes, gru_size])	
+		# M
 		relation_embedding = tf.get_variable('relation_embedding',[self.num_classes,gru_size])
+		# d
 		sen_d = tf.get_variable('bias_d',[self.num_classes])
 
 		gru_cell_forward = tf.nn.rnn_cell.GRUCell(gru_size)
@@ -58,6 +62,7 @@ class GRU:
 		sen_alpha = []
 		sen_s = []
 		sen_out = []
+		sen_dropout = []
 		self.prob = []
 		self.predictions = []
 		self.loss = []
@@ -98,19 +103,30 @@ class GRU:
 		
 		# word-level attention layer
 		output_h = tf.add(output_forward,output_backward)
-		attention_r = tf.reshape(tf.batch_matmul(tf.reshape(tf.nn.softmax(tf.reshape(tf.matmul(tf.reshape(tf.tanh(output_h),[total_num*num_steps,gru_size]),attention_w),[total_num,num_steps])),[total_num,1,num_steps]),output_h),[total_num,gru_size])
+		attention_r = tf.tanh(tf.reshape(tf.batch_matmul(tf.reshape(tf.nn.softmax(tf.reshape(tf.matmul(tf.reshape(tf.tanh(output_h),[total_num*num_steps,gru_size]),attention_w),[total_num,num_steps])),[total_num,1,num_steps]),output_h),[total_num,gru_size]))
 
+		with tf.name_scope("sen-attention"):
+			self.att = tf.nn.embedding_lookup(sen_a, self.input_r, name = 'A')
+			self.r = tf.nn.embedding_lookup(relation_embedding, self.input_r, name = 'r')
+		#	print "self.att", self.att.get_shape()
+		#	print "self.r", self.r.get_shape()
+			self.alpha = tf.reduce_mean(tf.mul(tf.mul(attention_r, self.att),self.r),1)
+		#	print "self.alpha", self.alpha.get_shape() #[?, 1]
 
 		# sentence-level attention layer
 		for i in range(big_num):
 
-			sen_repre.append(tf.tanh(attention_r[self.total_shape[i]:self.total_shape[i+1]]))
+			sen_repre.append(attention_r[self.total_shape[i]:self.total_shape[i+1]])
 			batch_size = self.total_shape[i+1]-self.total_shape[i]
-		
-			sen_alpha.append(tf.reshape(tf.nn.softmax(tf.reshape(tf.matmul(tf.mul(sen_repre[i],sen_a),sen_r),[batch_size])),[1,batch_size]))
-		
-			sen_s.append(tf.reshape(tf.matmul(sen_alpha[i],sen_repre[i]),[gru_size,1]))
-			sen_out.append(tf.add(tf.reshape(tf.matmul(relation_embedding,sen_s[i]),[self.num_classes]),sen_d))
+			
+			sen_alpha.append(self.alpha[self.total_shape[i]:self.total_shape[i+1]])
+			sen_alpha[i] = tf.reshape(sen_alpha[i], [1, -1])		
+			sen_s.append(tf.matmul(sen_alpha[i],sen_repre[i]))
+			with tf.name_scope("dropout"):
+				sen_dropout.append(tf.nn.dropout(sen_s[i], self.keep_prob))
+			with tf.name_scope("o"):
+				sen_dropout[i] = tf.reshape(sen_dropout[i], [-1, 1])
+				sen_out.append(tf.add(tf.reshape(tf.matmul(relation_embedding, sen_dropout[i]),[num_classes]),sen_d))
 		
 			self.prob.append(tf.nn.softmax(sen_out[i]))
 

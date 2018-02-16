@@ -12,7 +12,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('wechat_name', 'filehelper','the user you want to send info to')
 
 #if you want to try itchat, please set it to True
-itchat_run = False
+itchat_run = True
 if itchat_run:
 	import itchat
 
@@ -43,12 +43,17 @@ def main(_):
 				total_word = []
 				total_pos1 = []
 				total_pos2 = []
-				
+				total_r = []
 				for i in range(len(word_batch)):
 					total_shape.append(total_num)
 					total_num += len(word_batch[i])
+					for j in range(len(y_batch[i])):
+						if y_batch[i][j] == 1:
+							rel = j
+							break
 					for word in word_batch[i]:
 						total_word.append(word)
+						total_r.append(rel)
 					for pos1 in pos1_batch[i]:
 						total_pos1.append(pos1)
 					for pos2 in pos2_batch[i]:
@@ -59,13 +64,14 @@ def main(_):
 				total_word = np.array(total_word)
 				total_pos1 = np.array(total_pos1)
 				total_pos2 = np.array(total_pos2)
-
+				total_r = np.array(total_r)
 				feed_dict[mtest.total_shape] = total_shape
 				feed_dict[mtest.input_word] = total_word
 				feed_dict[mtest.input_pos1] = total_pos1
 				feed_dict[mtest.input_pos2] = total_pos2
 				feed_dict[mtest.input_y] = y_batch
-
+				feed_dict[mtest.input_r] = total_r
+				feed_dict[mtest.keep_prob] = 0.5
 				loss, accuracy ,prob= sess.run(
 					[mtest.loss, mtest.accuracy,mtest.prob], feed_dict)
 				return prob,accuracy
@@ -125,7 +131,7 @@ def main(_):
 
 			# ATTENTION: change the list to the iters you want to test !!
 			#testlist = range(9025,14000,25)
-			testlist = [10900]
+			testlist = [17500]
 			for model_iter in testlist:
 
 				saver.restore(sess,pathname+str(model_iter))
