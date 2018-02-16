@@ -4,7 +4,7 @@
 
 This is my results.
 
-![](./images/newresult.png)
+![](./images/result.png)
 
 Neural relation extraction aims to extract relations from plain text with neural models, which has been the state-of-the-art methods for relation extraction. In this project, we provide our implementations of a word-level and sentence-level combined Bidirectional GRU network (BGRU+2ATT).  
 
